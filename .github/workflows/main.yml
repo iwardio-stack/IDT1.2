@@ -25,14 +25,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
+      - name: Set Android SDK paths
         run: |
-          sdkmanager "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
       - name: Install Gradle 8.9
         run: |
@@ -40,44 +36,37 @@ jobs:
           unzip -q gradle-8.9-bin.zip
           echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
 
-      - name: Extract Android project
+      - name: Extract project ZIP
         run: |
           mkdir -p extracted
-
           ZIP_FILE=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No project ZIP file found."
+            echo "ERROR: No ZIP file found."
             exit 1
           fi
 
-          echo "Extracting: $ZIP_FILE"
           unzip -o "$ZIP_FILE" -d extracted
 
       - name: Find Android project
         run: |
-          PROJECT_DIR=$(find extracted -type f \( \
-            -name "settings.gradle" -o \
-            -name "settings.gradle.kts" \
-          \) -print -quit | xargs -r dirname)
+          PROJECT_DIR=$(find extracted -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -print -quit | xargs -r dirname)
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: Android project files not found."
-            find extracted -maxdepth 4 -type f | head -n 100
+            echo "ERROR: No Android project found."
+            find extracted -maxdepth 5 -type f | head -n 100
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Android project: $PROJECT_DIR"
+          echo "Project found: $PROJECT_DIR"
 
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
           gradle assembleDebug --no-daemon --stacktrace
-
-      - name: Find APK
-        run: |
-          find . -type f -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
